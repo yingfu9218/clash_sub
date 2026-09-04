@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>登录 · clash-sub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<main class="signin">
+  <div class="card">
+
+    <span class="brand">
+      <svg class="glyph" width="14" height="15" viewBox="0 0 14 15" fill="none" aria-hidden="true">
+        <path d="M2.5 1v12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <path d="M2.5 4.5h5.5M2.5 11h8.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="10" cy="4.5" r="1.7" fill="currentColor"/>
+        <circle cx="12" cy="11" r="1.7" fill="currentColor"/>
+      </svg>
+      <span class="word">clash-sub</span>
+    </span>
+
+    <h1>登录</h1>
+    <p class="lede">管理你的 Clash 订阅文件和订阅地址。</p>
+
+    <div class="alert" id="err" hidden>
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8 4.6v4.2M8 11.2v.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      <span id="errmsg"></span>
+    </div>
+
+    <form id="signin" novalidate>
+      <label class="field">
+        <span class="label">用户名</span>
+        <input class="input" type="text" name="user" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="admin" required>
+      </label>
+
+      <label class="field">
+        <span class="label">密码</span>
+        <input class="input" type="password" name="pass" autocomplete="current-password" placeholder="••••••••" required>
+      </label>
+
+      <div class="row">
+        <label class="check">
+          <input type="checkbox" name="remember" checked>
+          记住此设备
+        </label>
+        <span class="hint" style="margin:0">密码在 config.yaml 中重置</span>
+      </div>
+
+      <button class="btn btn--primary btn--lg btn--block" type="submit" id="go">登录</button>
+    </form>
+
+    <p class="footline">订阅地址带随机 token，只有拿到链接的人能取到配置。删除订阅后，地址立刻失效。</p>
+
+  </div>
+</main>
+
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  var form = document.getElementById('signin');
+  var err = document.getElementById('err');
+  var msg = document.getElementById('errmsg');
+  var go = document.getElementById('go');
+
+  function fail(text, focus) {
+    msg.textContent = text;
+    err.hidden = false;
+    if (focus) focus.focus();
+  }
+
+  /* 已经登录过就直接进列表 */
+  api('GET', '/api/me').then(function () { location.replace('index.html'); }).catch(function () {});
+
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+
+    var user = form.user.value.trim();
+    var pass = form.pass.value;
+    form.user.setAttribute('aria-invalid', String(!user));
+    form.pass.setAttribute('aria-invalid', String(!pass));
+
+    if (!user || !pass) {
+      fail('请填写用户名和密码。', user ? form.pass : form.user);
+      return;
+    }
+
+    err.hidden = true;
+    go.disabled = true;
+    go.textContent = '登录中';
+
+    api('POST', '/api/login', { username: user, password: pass, remember: form.remember.checked })
+      .then(function () {
+        // Must be a site-relative path. "//evil.com" also starts with "/" and
+        // would leave the site, so a second slash disqualifies it.
+        var next = new URLSearchParams(location.search).get('next') || '';
+        var safe = next.charAt(0) === '/' && next.charAt(1) !== '/' && next.charAt(1) !== '\\';
+        location.replace(safe ? next : 'index.html');
+      })
+      .catch(function (e) {
+        go.disabled = false;
+        go.textContent = '登录';
+        form.pass.value = '';
+        fail(e.message || '登录失败，请重试。', form.pass);
+      });
+  });
+})();
+</script>
+</body>
+</html>

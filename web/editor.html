@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>编辑订阅 · clash-sub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/vendor/codemirror.min.css">
+<link rel="stylesheet" href="assets/vendor/lint.min.css">
+<link rel="stylesheet" href="assets/vendor/foldgutter.min.css">
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+
+<div class="edit" id="shell">
+
+  <header class="edithead">
+    <a class="back" href="index.html" aria-label="返回订阅列表">
+      <svg width="17" height="17" viewBox="0 0 17 17" fill="none" aria-hidden="true">
+        <path d="M10.4 3.8L5.7 8.5l4.7 4.7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </a>
+
+    <input class="nameinput" id="name" aria-label="订阅名称" placeholder="给这个订阅起个名字" maxlength="60">
+    <input class="noteinput" id="note" aria-label="备注" placeholder="备注（可选）" maxlength="120">
+    <button class="tag tag--draft" type="button" id="status" title="启用后订阅地址才可访问">
+      <span class="dot dot--draft"></span>草稿
+    </button>
+
+    <span class="spacer"></span>
+
+    <button class="iconbtn" type="button" data-theme-toggle aria-label="切换外观">
+      <svg data-icon-light width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+        <circle cx="8" cy="8" r="3.2" stroke="currentColor" stroke-width="1.4"/>
+        <path d="M8 1v1.6M8 13.4V15M15 8h-1.6M2.6 8H1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1M12.9 12.9l-1.1-1.1M4.2 4.2L3.1 3.1" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
+      </svg>
+      <svg data-icon-dark width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true" hidden>
+        <path d="M13.4 9.6A5.8 5.8 0 016.4 2.6a5.9 5.9 0 107 7z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+      </svg>
+    </button>
+    <button class="btn btn--primary desktoponly" type="button" id="save">保存</button>
+  </header>
+
+  <div class="linkbar" id="linkbar">
+    <span class="lbl">订阅地址</span>
+    <code style="color:var(--ink-3)">保存后生成，带一个随机 token</code>
+  </div>
+
+  <div class="paneswitch" role="tablist" aria-label="视图">
+    <button type="button" role="tab" aria-selected="true" data-pane-btn="code">编辑</button>
+    <button type="button" role="tab" aria-selected="false" data-pane-btn="side">概览</button>
+  </div>
+
+  <div class="workspace">
+
+    <section class="pane pane--code">
+      <div class="cmbar">
+        <button class="btn btn--quiet" type="button" id="fmt">格式化</button>
+        <button class="btn btn--quiet" type="button" data-snip="proxy">插入节点</button>
+        <button class="btn btn--quiet" type="button" data-snip="rule">插入规则</button>
+        <span class="spacer"></span>
+        <span class="state" id="state1"><span class="dot dot--live"></span><span>语法正常</span></span>
+      </div>
+      <div class="editorbox"><textarea id="yaml"></textarea></div>
+    </section>
+
+    <!-- Recomputed from the document on every keystroke. Not decoration:
+         this is what the client will actually receive. -->
+    <aside class="pane pane--side readout" aria-label="配置概览">
+      <h2>这份配置里有什么</h2>
+      <dl>
+        <dt>代理节点</dt><dd id="c-proxies">0</dd>
+        <dt>策略组</dt><dd id="c-groups">0</dd>
+        <dt>分流规则</dt><dd id="c-rules">0</dd>
+      </dl>
+
+      <h2>节点类型</h2>
+      <div class="bars" id="types"></div>
+
+      <h2>运行参数</h2>
+      <dl>
+        <dt>混合端口</dt><dd id="c-port">—</dd>
+        <dt>运行模式</dt><dd id="c-mode">—</dd>
+        <dt>局域网访问</dt><dd id="c-lan">—</dd>
+        <dt>日志级别</dt><dd id="c-log">—</dd>
+      </dl>
+
+      <div class="problem" id="problem" hidden>
+        <span id="problemtext"></span>
+        <code id="problemwhere"></code>
+      </div>
+    </aside>
+
+  </div>
+
+  <div class="savebar">
+    <span class="state" id="state2"><span class="dot dot--live"></span><span>语法正常</span></span>
+    <button class="btn btn--primary" type="button" id="save2">保存</button>
+  </div>
+
+</div>
+
+<!-- 重新生成 token -->
+<div class="scrim" id="dlg-token" hidden role="dialog" aria-modal="true" aria-labelledby="tokhead">
+  <div class="dialog">
+    <h2 id="tokhead">重新生成订阅地址？</h2>
+    <p>会换一个新 token。旧地址马上失效，已经导入旧地址的客户端需要重新添加。</p>
+    <div class="acts">
+      <button class="btn" type="button" data-close data-autofocus>取消</button>
+      <button class="btn btn--primary" type="button" id="tokok">重新生成</button>
+    </div>
+  </div>
+</div>
+
+<script src="assets/vendor/js-yaml.min.js"></script>
+<script src="assets/vendor/codemirror.min.js"></script>
+<script src="assets/vendor/yaml.min.js"></script>
+<script src="assets/vendor/matchbrackets.min.js"></script>
+<script src="assets/vendor/active-line.min.js"></script>
+<script src="assets/vendor/foldcode.min.js"></script>
+<script src="assets/vendor/foldgutter.min.js"></script>
+<script src="assets/vendor/indent-fold.min.js"></script>
+<script src="assets/vendor/lint.min.js"></script>
+<script src="assets/app.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var qs = new URLSearchParams(location.search);
+  var id = qs.get('id');
+  var isNew = !id;
+
+  var BLANK = [
+    '# 新订阅',
+    '',
+    'mixed-port: 7890',
+    'allow-lan: false',
+    'mode: rule',
+    'log-level: info',
+    '',
+    'proxies: []',
+    '',
+    'proxy-groups: []',
+    '',
+    'rules:',
+    '  - MATCH,DIRECT',
+    ''
+  ].join('\n');
+
+  /* ---- 语法检查 ---------------------------------------------------------- */
+
+  /* Single source of truth. The lint addon runs on its own 500ms timer, so
+     nothing else may read its result — everyone parses through here. */
+  function parse(text) {
+    if (!text.trim()) return { doc: {}, err: null };
+    try {
+      return { doc: jsyaml.load(text), err: null };
+    } catch (e) {
+      return {
+        doc: null,
+        err: {
+          line: e.mark && typeof e.mark.line === 'number' ? e.mark.line : 0,
+          col: e.mark && typeof e.mark.column === 'number' ? e.mark.column : 0,
+          reason: e.reason || e.message
+        }
+      };
+    }
+  }
+
+  function lint(text) {
+    var err = parse(text).err;
+    if (!err) return [];
+    return [{
+      from: CodeMirror.Pos(err.line, err.col),
+      to: CodeMirror.Pos(err.line, err.col + 1),
+      message: err.reason,
+      severity: 'error'
+    }];
+  }
+
+  /* ---- 编辑器 ------------------------------------------------------------ */
+
+  var cm = CodeMirror.fromTextArea(document.getElementById('yaml'), {
+    mode: 'yaml',
+    theme: 'manifest',
+    lineNumbers: true,
+    lineWrapping: false,
+    indentUnit: 2,
+    tabSize: 2,
+    indentWithTabs: false,
+    smartIndent: true,
+    matchBrackets: true,
+    styleActiveLine: true,
+    foldGutter: { rangeFinder: CodeMirror.fold.indent },
+    gutters: ['CodeMirror-lint-markers', 'CodeMirror-linenumbers', 'CodeMirror-foldgutter'],
+    lint: { getAnnotations: lint, async: false, lintOnChange: true },
+    extraKeys: {
+      Tab: function (c) { c.execCommand('indentMore'); },
+      'Shift-Tab': function (c) { c.execCommand('indentLess'); },
+      'Ctrl-S': function () { save(); },
+      'Cmd-S': function () { save(); }
+    }
+  });
+
+  /* ---- 概览：随输入重算 --------------------------------------------------- */
+
+  var el = {
+    proxies: document.getElementById('c-proxies'),
+    groups: document.getElementById('c-groups'),
+    rules: document.getElementById('c-rules'),
+    port: document.getElementById('c-port'),
+    mode: document.getElementById('c-mode'),
+    lan: document.getElementById('c-lan'),
+    log: document.getElementById('c-log'),
+    types: document.getElementById('types'),
+    problem: document.getElementById('problem'),
+    problemText: document.getElementById('problemtext'),
+    problemWhere: document.getElementById('problemwhere')
+  };
+
+  var MODE = { rule: '规则', global: '全局', direct: '直连' };
+
+  function num(node, v) {
+    node.textContent = v;
+    node.classList.toggle('zero', v === 0 || v === '—');
+  }
+
+  function readout() {
+    var res = parse(cm.getValue());
+    var err = res.err;
+
+    document.querySelectorAll('.state').forEach(function (s) {
+      s.classList.toggle('bad', !!err);
+      var d = s.querySelector('.dot');
+      d.className = 'dot ' + (err ? '' : 'dot--live');
+      d.style.background = err ? 'var(--red)' : '';
+      s.querySelector('span:last-child').textContent =
+        err ? '第 ' + (err.line + 1) + ' 行有错' : '语法正常';
+    });
+
+    if (err) {
+      el.problem.hidden = false;
+      el.problemText.textContent = 'YAML 还没读通，下面的数字停在上一次能读懂的内容。';
+      el.problemWhere.textContent = '第 ' + (err.line + 1) + ' 行：' + err.reason;
+      return;
+    }
+    el.problem.hidden = true;
+
+    var doc = res.doc;
+    if (!doc || typeof doc !== 'object') doc = {};
+
+    var proxies = Array.isArray(doc.proxies) ? doc.proxies : [];
+    var groups = Array.isArray(doc['proxy-groups']) ? doc['proxy-groups'] : [];
+    var rules = Array.isArray(doc.rules) ? doc.rules : [];
+
+    num(el.proxies, proxies.length);
+    num(el.groups, groups.length);
+    num(el.rules, rules.length);
+
+    var port = doc['mixed-port'] || doc.port || doc['socks-port'];
+    num(el.port, port || '—');
+    num(el.mode, MODE[String(doc.mode || '').toLowerCase()] || doc.mode || '—');
+    num(el.lan, doc['allow-lan'] === true ? '开' : doc['allow-lan'] === false ? '关' : '—');
+    num(el.log, doc['log-level'] || '—');
+
+    /* 节点类型分布 */
+    var tally = {};
+    proxies.forEach(function (p) {
+      var t = (p && p.type ? String(p.type) : '未知').toLowerCase();
+      tally[t] = (tally[t] || 0) + 1;
+    });
+    var keys = Object.keys(tally).sort(function (a, b) { return tally[b] - tally[a]; });
+    var max = keys.length ? tally[keys[0]] : 1;
+
+    if (!keys.length) {
+      el.types.innerHTML = '<p class="hint" style="margin:8px 0 0">还没有节点。用上面的“插入节点”加一个。</p>';
+      return;
+    }
+    el.types.innerHTML = keys.map(function (k) {
+      return '<div class="bar"><span class="n">' + k + '</span><span class="n">' + tally[k] + '</span>' +
+             '<span class="track"><i style="width:' + Math.round(tally[k] / max * 100) + '%"></i></span></div>';
+    }).join('');
+  }
+
+  /* ---- 工具条 ------------------------------------------------------------ */
+
+  document.getElementById('fmt').addEventListener('click', function () {
+    var res = parse(cm.getValue());
+    if (res.err) {
+      window.toast('先修好第 ' + (res.err.line + 1) + ' 行的语法错误', 'error');
+      return;
+    }
+    var at = cm.getCursor();
+    cm.setValue(jsyaml.dump(res.doc, { indent: 2, lineWidth: 100, noRefs: true, sortKeys: false }));
+    cm.setCursor(at);
+    window.toast('已格式化');
+  });
+
+  var SNIPPETS = {
+    proxy: [
+      '  - name: 新节点',
+      '    type: ss',
+      '    server: example.net',
+      '    port: 8443',
+      '    cipher: aes-256-gcm',
+      '    password: "REPLACE_ME"',
+      ''
+    ].join('\n'),
+    rule: '  - DOMAIN-SUFFIX,example.com,DIRECT\n'
+  };
+
+  document.querySelectorAll('[data-snip]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = SNIPPETS[b.getAttribute('data-snip')];
+      var line = cm.getCursor().line;
+      cm.replaceRange(text, CodeMirror.Pos(line + 1, 0));
+      cm.setCursor(CodeMirror.Pos(line + 1, 4));
+      cm.focus();
+    });
+  });
+
+  /* ---- 状态 -------------------------------------------------------------- */
+
+  var nameEl = document.getElementById('name');
+  var noteEl = document.getElementById('note');
+  var statusEl = document.getElementById('status');
+  var token = null;
+  var enabled = false;
+  var dirty = false;
+  var ready = false;
+
+  function paintStatus() {
+    if (dirty) {
+      statusEl.className = 'tag tag--draft';
+      statusEl.innerHTML = '<span class="dot dot--draft"></span>未保存';
+      statusEl.title = '有改动还没保存';
+      return;
+    }
+    statusEl.className = enabled ? 'tag tag--live' : 'tag tag--draft';
+    statusEl.innerHTML = enabled
+      ? '<span class="dot dot--live"></span>已启用'
+      : '<span class="dot dot--draft"></span>已停用';
+    statusEl.title = enabled ? '点击停用，订阅地址将返回 404' : '点击启用，订阅地址才可访问';
+  }
+
+  function markDirty() {
+    if (!ready || dirty) return;
+    dirty = true;
+    paintStatus();
+  }
+
+  function setToken(tok) {
+    token = tok;
+    var url = location.origin + '/subscribe?token=' + tok;
+    document.getElementById('linkbar').innerHTML =
+      '<span class="lbl">订阅地址</span>' +
+      '<code>' + location.origin + '/subscribe?token=<b>' + tok + '</b></code>' +
+      '<button class="minibtn" type="button" data-copy="' + url + '">复制</button>' +
+      '<button class="minibtn" type="button" data-open="dlg-token">重新生成</button>';
+  }
+
+  /* 点状态标签直接启用 / 停用（已保存的订阅才有意义） */
+  statusEl.addEventListener('click', function () {
+    if (isNew && !token) { window.toast('先保存，再决定要不要启用', 'error'); return; }
+    if (dirty) { window.toast('先保存改动', 'error'); return; }
+    var want = !enabled;
+    api('PATCH', '/api/subscriptions/' + id, { enabled: want }).then(function (it) {
+      enabled = it.enabled;
+      paintStatus();
+      window.toast(enabled ? '已启用，订阅地址可以访问了' : '已停用，订阅地址暂时返回 404');
+    }).catch(function (e) { window.toast(e.message, 'error'); });
+  });
+
+  /* ---- 保存 -------------------------------------------------------------- */
+
+  function save() {
+    var err = parse(cm.getValue()).err;
+    if (err) { window.toast('第 ' + (err.line + 1) + ' 行还有语法错误，先修好再保存', 'error'); return; }
+
+    var name = nameEl.value.trim();
+    if (!name) { window.toast('给这个订阅起个名字', 'error'); nameEl.focus(); return; }
+
+    var body = { name: name, note: noteEl.value.trim(), content: cm.getValue() };
+    var req = id
+      ? api('PUT', '/api/subscriptions/' + id, body)
+      : api('POST', '/api/subscriptions', body);
+
+    [document.getElementById('save'), document.getElementById('save2')].forEach(function (b) { b.disabled = true; });
+
+    req.then(function (it) {
+      var first = !id;
+      id = String(it.id);
+      isNew = false;
+      enabled = it.enabled;
+      dirty = false;
+      paintStatus();
+
+      if (it.token !== token) setToken(it.token);
+
+      if (first) {
+        history.replaceState(null, '', 'editor.html?id=' + id);
+        document.title = name + ' · clash-sub';
+        window.toast('已保存，订阅地址已生成');
+      } else {
+        window.toast('已保存');
+      }
+    }).catch(function (e) {
+      window.toast(e.message, 'error');
+    }).then(function () {
+      [document.getElementById('save'), document.getElementById('save2')].forEach(function (b) { b.disabled = false; });
+    });
+  }
+
+  document.getElementById('save').addEventListener('click', save);
+  document.getElementById('save2').addEventListener('click', save);
+  nameEl.addEventListener('input', markDirty);
+  noteEl.addEventListener('input', markDirty);
+
+  var t;
+  cm.on('change', function () {
+    clearTimeout(t);
+    t = setTimeout(readout, 140);
+    markDirty();
+  });
+
+  /* ---- token ------------------------------------------------------------- */
+
+  document.getElementById('tokok').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true;
+    api('POST', '/api/subscriptions/' + id + '/token').then(function (it) {
+      setToken(it.token);
+      window.toast('已生成新的订阅地址');
+    }).catch(function (e) {
+      window.toast(e.message, 'error');
+    }).then(function () {
+      btn.disabled = false;
+      window.closeDialog('dlg-token');
+    });
+  });
+
+  /* ---- 装载 -------------------------------------------------------------- */
+
+  function boot(sub) {
+    if (sub) {
+      nameEl.value = sub.name;
+      noteEl.value = sub.note || '';
+      enabled = sub.enabled;
+      cm.setValue(sub.content || '');   // omitempty drops an empty document
+      setToken(sub.token);
+      document.title = sub.name + ' · clash-sub';
+    } else {
+      document.title = '新建订阅 · clash-sub';
+      cm.setValue(BLANK);
+      setTimeout(function () { nameEl.focus(); }, 60);
+    }
+    ready = true;
+    paintStatus();
+    readout();
+    cm.refresh();
+  }
+
+  if (isNew) {
+    boot(null);
+  } else {
+    api('GET', '/api/subscriptions/' + id)
+      .then(boot)
+      .catch(function (e) {
+        window.toast(e.message || '这条订阅不存在', 'error');
+        setTimeout(function () { location.replace('index.html'); }, 1200);
+      });
+  }
+
+  /* ---- H5 视图切换 -------------------------------------------------------- */
+
+  document.querySelectorAll('[data-pane-btn]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('[data-pane-btn]').forEach(function (o) {
+        o.setAttribute('aria-selected', String(o === b));
+      });
+      document.getElementById('shell').setAttribute('data-pane', b.getAttribute('data-pane-btn'));
+      if (b.getAttribute('data-pane-btn') === 'code') setTimeout(function () { cm.refresh(); }, 0);
+    });
+  });
+
+  window.addEventListener('beforeunload', function (e) {
+    if (!dirty) return;
+    e.preventDefault();
+    e.returnValue = '';
+  });
+})();
+</script>
+</body>
+</html>

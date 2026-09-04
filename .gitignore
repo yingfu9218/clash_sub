@@ -1,0 +1,29 @@
+# ── 运行时生成，绝对不要提交 ──────────────────────────────
+# config.yaml 含 bcrypt 密码哈希和 cookie 签名密钥
+/config.yaml
+/config.*.yaml
+
+# 订阅数据；*.tmp 是原子写入的中间文件
+/data/
+*.tmp
+
+# ── 构建产物 ────────────────────────────────────────────
+/clash-sub
+/clash-sub.exe
+/dist/
+
+# ── Go ─────────────────────────────────────────────────
+*.test
+*.out
+coverage.*
+# 前导 / 很重要：不加的话会连 web/assets/vendor/ 一起忽略掉
+/vendor/
+
+# ── 编辑器 / 系统 ───────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# 注意：web/assets/vendor/ 是前端依赖，必须提交 —— //go:embed 要靠它
+# 把 CodeMirror 打进二进制。这里没有任何规则会忽略它。
