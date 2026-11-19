@@ -29,6 +29,10 @@ make dist                   # 交叉编译 linux/darwin/windows
 | `password_hash` | bcrypt 哈希。**删掉这一行再重启**即可重置密码 |
 | `secret` | cookie 签名密钥。改掉会让所有会话立即失效 |
 | `data_file` | 订阅存储路径，默认 `data/subscriptions.json` |
+| `login_allow_ips` | 允许登录的 IP / CIDR 列表，如 `["1.2.3.4", "10.0.0.0/8"]`。`[]` 表示不限制。被拒绝的 IP 会打到日志里 |
+| `trusted_proxies` | 前置反向代理地址。只采信来自这些地址的 `X-Forwarded-For`；直连公网留空 `[]`，本机 Nginx 填 `["127.0.0.1", "::1"]` |
+
+旧版本生成的 `config.yaml` 缺少新字段时，启动会自动补上（连同注释）。
 
 命令行 `-config` / `-listen` 可覆盖。
 
@@ -64,6 +68,8 @@ token 是唯一凭据，不需要登录即可访问。响应带 `Content-Disposi
 ## 安全边界
 
 - 密码 bcrypt 存储；登录失败按 IP 计数，15 分钟内 5 次锁定
+- `login_allow_ips` 限制可登录的来源 IP，不在名单内直接 403，不消耗 bcrypt。只限制登录，不影响 `/subscribe`
+- 客户端 IP 只在请求来自 `trusted_proxies` 时才看 `X-Forwarded-For`，否则用 TCP 对端地址，无法伪造
 - `config.yaml` 与数据文件权限 `0600`
 - cookie `HttpOnly` + `SameSite=Lax`，HTTPS 下自动加 `Secure`
 - 数据文件先写临时文件再 rename，写一半崩溃不会毁掉配置

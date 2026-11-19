@@ -68,9 +68,17 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	handler, err := srv.routes()
+	if err != nil {
+		log.Fatalf("设置可信代理失败: %v", err)
+	}
+	if len(cfg.loginAllow) == 0 {
+		fmt.Println("注意：login_allow_ips 为空，任何 IP 都可以尝试登录")
+	}
+
 	httpServer := &http.Server{
 		Addr:              cfg.Listen,
-		Handler:           srv.routes(),
+		Handler:           handler,
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -104,8 +112,14 @@ func normalizeAddr(addr string) string {
 	return addr
 }
 
-func (s *Server) routes() http.Handler {
+func (s *Server) routes() (http.Handler, error) {
 	r := gin.New()
+	// gin trusts every proxy by default, which lets any client pick its own
+	// address via X-Forwarded-For and walk past the login allowlist. An empty
+	// list means "trust none": the TCP peer address is used.
+	if err := r.SetTrustedProxies(s.cfg.TrustedProxies); err != nil {
+		return nil, err
+	}
 	r.Use(gin.Logger(), gin.Recovery())
 
 	// The subscription endpoint authenticates with its token, not a session.
@@ -127,7 +141,7 @@ func (s *Server) routes() http.Handler {
 	auth.POST("/subscriptions/:id/token", s.rotateToken)
 
 	r.NoRoute(s.serveStatic)
-	return r
+	return r, nil
 }
 
 var contentTypes = map[string]string{

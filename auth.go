@@ -6,6 +6,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"strconv"
@@ -164,6 +165,15 @@ func (s *Server) requireAuth() gin.HandlerFunc {
 }
 
 func (s *Server) handleLogin(c *gin.Context) {
+	// Checked before anything else: an address outside the allowlist never
+	// reaches bcrypt and never touches the throttle table.
+	ip := clientIP(c)
+	if !s.cfg.loginAllowed(ip) {
+		log.Printf("拒绝登录：%s 不在 login_allow_ips 中", ip)
+		c.JSON(http.StatusForbidden, gin.H{"error": "当前 IP 不允许登录"})
+		return
+	}
+
 	var req struct {
 		Username string `json:"username"`
 		Password string `json:"password"`
@@ -174,7 +184,6 @@ func (s *Server) handleLogin(c *gin.Context) {
 		return
 	}
 
-	ip := clientIP(c)
 	if s.throttle.locked(ip) {
 		c.JSON(http.StatusTooManyRequests, gin.H{"error": "尝试次数过多，请 15 分钟后再试"})
 		return
